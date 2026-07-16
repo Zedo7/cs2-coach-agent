@@ -1,0 +1,11 @@
+{
+  "map": "Mirage",
+  "side": "T",
+  "score": {"us": 3, "them": 7},
+  "economy": {"us_avg": 2400, "them_avg": 5200},
+  "recent_rounds": [
+    {"round": 8, "result": "loss", "detail": "A执行被守枪+连狙拒之门外, 白给4人"},
+    {"round": 9, "result": "loss", "detail": "eco局rush B, 被双架点交叉火力清光"},
+    {"round": 10, "result": "loss", "detail": "半起局中路慢摸, 被CT前顶打乱, 残局1v3失败"}
+  ]
+}
