@@ -1,0 +1,64 @@
+{
+  "id": "edge_01",
+  "map": "Mirage",
+  "side": "T",
+  "score": {
+    "us": 8,
+    "them": 8
+  },
+  "economy": {
+    "us_avg": 3200,
+    "them_avg": 4600,
+    "us_spread": [
+      5400,
+      5200,
+      1100,
+      900,
+      3400
+    ]
+  },
+  "recent_rounds": [
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "赢了上一回合但两个人是用pistol拿的, 钱不平均"
+    },
+    {
+      "round": 16,
+      "result": "loss",
+      "detail": "A执行, 穷的两个人只有pistol, 一碰就死, 变成3v5"
+    },
+    {
+      "round": 17,
+      "result": "loss",
+      "detail": "又是穷的人先死, 富的两个人打不了残局"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "half_buy",
+      "force_buy"
+    ],
+    "reason_tags": [
+      [
+        "不平均",
+        "spread",
+        "穷",
+        "poor",
+        "pistol",
+        "钱",
+        "money",
+        "uneven"
+      ],
+      [
+        "残局",
+        "3v5",
+        "人数",
+        "outnumber",
+        "先死",
+        "die first"
+      ]
+    ],
+    "notes": "Mixed economy: average hides a 5400/900 spread. Drops are the real answer; label must stay honest vs the 3200 average."
+  }
+}

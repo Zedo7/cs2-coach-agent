@@ -1,0 +1,51 @@
+{
+  "id": "eco_02",
+  "map": "Inferno",
+  "side": "T",
+  "score": {
+    "us": 4,
+    "them": 9
+  },
+  "economy": {
+    "us_avg": 1200,
+    "them_avg": 5800
+  },
+  "recent_rounds": [
+    {
+      "round": 13,
+      "result": "loss",
+      "detail": "B执行被守枪打退, 四把枪没带回来"
+    },
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "半起局rush A, 被架点清光"
+    },
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "又是半起, 钱全花光还是没拿到回合"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "eco",
+      "force_buy"
+    ],
+    "reason_tags": [
+      [
+        "半起",
+        "half",
+        "强起",
+        "force"
+      ],
+      [
+        "架点",
+        "守枪",
+        "hold",
+        "anchor"
+      ]
+    ],
+    "notes": "1200 caps the buy at pistol+armor at best."
+  }
+}

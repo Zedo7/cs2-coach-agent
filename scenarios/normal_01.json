@@ -1,0 +1,47 @@
+{
+  "id": "normal_01",
+  "map": "Mirage",
+  "side": "T",
+  "score": {
+    "us": 3,
+    "them": 7
+  },
+  "economy": {
+    "us_avg": 4800,
+    "them_avg": 5100
+  },
+  "recent_rounds": [
+    {
+      "round": 8,
+      "result": "loss",
+      "detail": "中路控制权丢失, AWP连续架window打掉我们两个人"
+    },
+    {
+      "round": 9,
+      "result": "loss",
+      "detail": "又从中路慢摸, 被同一个AWP在window点掉entry"
+    },
+    {
+      "round": 10,
+      "result": "loss",
+      "detail": "A执行前中路没封烟, AWP从window一枪带走突破手"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "awp",
+        "狙"
+      ],
+      [
+        "mid",
+        "中路",
+        "window"
+      ]
+    ],
+    "notes": "AWP holding mid/window is the repeated cause; money affords full buy."
+  }
+}

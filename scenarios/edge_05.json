@@ -1,0 +1,51 @@
+{
+  "id": "edge_05",
+  "map": "Ancient",
+  "side": "CT",
+  "score": {
+    "us": 5,
+    "them": 15
+  },
+  "economy": {
+    "us_avg": 4500,
+    "them_avg": 6500
+  },
+  "recent_rounds": [
+    {
+      "round": 18,
+      "result": "loss",
+      "detail": "A点被默认打法拿下, 我们站位太散"
+    },
+    {
+      "round": 19,
+      "result": "loss",
+      "detail": "A又被同样的default execute拿下"
+    },
+    {
+      "round": 20,
+      "result": "loss",
+      "detail": "A第三次被同一套default打穿, 站位还是散的"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "a点",
+        " a ",
+        "a site"
+      ],
+      [
+        "default",
+        "默认",
+        "站位",
+        "散",
+        "spread",
+        "position"
+      ]
+    ],
+    "notes": "5-15 down but money is fine. Saving here is wrong; full buy is affordable."
+  }
+}

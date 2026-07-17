@@ -1,0 +1,51 @@
+{
+  "id": "normal_03",
+  "map": "Dust2",
+  "side": "T",
+  "score": {
+    "us": 5,
+    "them": 9
+  },
+  "economy": {
+    "us_avg": 4600,
+    "them_avg": 5400
+  },
+  "recent_rounds": [
+    {
+      "round": 12,
+      "result": "loss",
+      "detail": "long执行, 门口第一个人被AWP点掉, 后面没人补枪"
+    },
+    {
+      "round": 13,
+      "result": "loss",
+      "detail": "再打long, 同样门口开死, 没有换人就撤了"
+    },
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "long dry peek, AWP又拿一个, 我们没有trade"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "long",
+        "长道"
+      ],
+      [
+        "awp",
+        "狙"
+      ],
+      [
+        "trade",
+        "补枪",
+        "换人"
+      ]
+    ],
+    "notes": "Long AWP + failure to trade; full buy affordable."
+  }
+}

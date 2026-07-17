@@ -1,0 +1,51 @@
+{
+  "id": "caus_03",
+  "map": "Dust2",
+  "side": "T",
+  "score": {
+    "us": 4,
+    "them": 6
+  },
+  "economy": {
+    "us_avg": 4800,
+    "them_avg": 4400
+  },
+  "recent_rounds": [
+    {
+      "round": 9,
+      "result": "loss",
+      "detail": "lurker一个人在B道被抓, 4v5打A失败"
+    },
+    {
+      "round": 10,
+      "result": "loss",
+      "detail": "lurker又一个人在B道被抓, 又是4v5"
+    },
+    {
+      "round": 11,
+      "result": "loss",
+      "detail": "lurker第三次单独被抓, 全队还是4v5开打"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "lurk",
+        "游走",
+        "单独",
+        "一个人",
+        "alone",
+        "solo"
+      ],
+      [
+        "4v5",
+        "人数",
+        "outnumber"
+      ]
+    ],
+    "notes": "Lurker dying alone every round, creating a 4v5. Generic reason must fail."
+  }
+}

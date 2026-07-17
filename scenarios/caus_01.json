@@ -1,0 +1,54 @@
+{
+  "id": "caus_01",
+  "map": "Mirage",
+  "side": "T",
+  "score": {
+    "us": 6,
+    "them": 7
+  },
+  "economy": {
+    "us_avg": 4700,
+    "them_avg": 4600
+  },
+  "recent_rounds": [
+    {
+      "round": 11,
+      "result": "loss",
+      "detail": "同一个ramp角, 我们第一个人探头被AWP点掉"
+    },
+    {
+      "round": 12,
+      "result": "loss",
+      "detail": "还是那个ramp角, 又是第一个人探头被同一把AWP点掉"
+    },
+    {
+      "round": 13,
+      "result": "loss",
+      "detail": "第三次探同一个ramp角, 又被同一把AWP点掉"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "ramp",
+        "斜坡"
+      ],
+      [
+        "同一",
+        "same",
+        "re-peek",
+        "repeek",
+        "重复",
+        "again"
+      ],
+      [
+        "awp",
+        "狙"
+      ]
+    ],
+    "notes": "Re-peeking the identical angle three times. 'We played badly' must fail."
+  }
+}

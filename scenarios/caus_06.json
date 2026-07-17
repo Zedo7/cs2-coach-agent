@@ -1,0 +1,51 @@
+{
+  "id": "caus_06",
+  "map": "Overpass",
+  "side": "T",
+  "score": {
+    "us": 6,
+    "them": 9
+  },
+  "economy": {
+    "us_avg": 4400,
+    "them_avg": 5000
+  },
+  "recent_rounds": [
+    {
+      "round": 13,
+      "result": "loss",
+      "detail": "包手第一个进点, 一开枪就死, 包掉在开阔地没人敢捡"
+    },
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "包手又是第一个进, 又死在门口, 包又捡不回来"
+    },
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "包手第三次当突破手, 死了之后包直接丢了"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "包手",
+        "bomb carrier",
+        "carrier",
+        "c4",
+        "包"
+      ],
+      [
+        "突破",
+        "entry",
+        "第一个",
+        "first"
+      ]
+    ],
+    "notes": "Bomb carrier entry-fragging and dying first, three rounds running."
+  }
+}

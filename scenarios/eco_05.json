@@ -1,0 +1,54 @@
+{
+  "id": "eco_05",
+  "map": "Nuke",
+  "side": "T",
+  "score": {
+    "us": 3,
+    "them": 11
+  },
+  "economy": {
+    "us_avg": 1500,
+    "them_avg": 6000
+  },
+  "recent_rounds": [
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "上层执行被CT提前架住, 没进点"
+    },
+    {
+      "round": 16,
+      "result": "loss",
+      "detail": "vents慢摸被听到, 全队被堵在里面"
+    },
+    {
+      "round": 17,
+      "result": "loss",
+      "detail": "又走vents, CT早就在等, 一个没出来"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "eco",
+      "force_buy",
+      "half_buy"
+    ],
+    "reason_tags": [
+      [
+        "vents",
+        "通风",
+        "管道"
+      ],
+      [
+        "预架",
+        "架住",
+        "堵",
+        "听",
+        "预判",
+        "read",
+        "expect"
+      ]
+    ],
+    "notes": "1500 and the CTs have read the vents route twice."
+  }
+}

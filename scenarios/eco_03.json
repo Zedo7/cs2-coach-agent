@@ -1,0 +1,53 @@
+{
+  "id": "eco_03",
+  "map": "Dust2",
+  "side": "CT",
+  "score": {
+    "us": 6,
+    "them": 9
+  },
+  "economy": {
+    "us_avg": 1900,
+    "them_avg": 5000
+  },
+  "recent_rounds": [
+    {
+      "round": 13,
+      "result": "loss",
+      "detail": "B点被四个人快冲, 一个人守没换到"
+    },
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "B又被冲, 补防慢了三秒"
+    },
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "B第三次被冲穿, 还是只有一个人在点"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "eco",
+      "force_buy",
+      "half_buy"
+    ],
+    "reason_tags": [
+      [
+        "b点",
+        " b ",
+        "b site"
+      ],
+      [
+        "补防",
+        "rotate",
+        "轮转",
+        "一个人",
+        "outnumber",
+        "人数"
+      ]
+    ],
+    "notes": "1900: SMG force is the ceiling; full buy impossible."
+  }
+}

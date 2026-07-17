@@ -1,0 +1,60 @@
+{
+  "id": "edge_04",
+  "map": "Nuke",
+  "side": "T",
+  "score": {
+    "us": 5,
+    "them": 7
+  },
+  "economy": {
+    "us_avg": 3000,
+    "them_avg": 4800
+  },
+  "roster": {
+    "us_players": 4,
+    "them_players": 5,
+    "note": "一名队友掉线, 本局4v5"
+  },
+  "recent_rounds": [
+    {
+      "round": 12,
+      "result": "loss",
+      "detail": "队友掉线后我们4v5, A执行人不够, 被守住"
+    },
+    {
+      "round": 13,
+      "result": "loss",
+      "detail": "还是4v5, 硬打上层, 人数劣势下被清"
+    },
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "4v5又硬打, 没有利用道具弥补人数"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "force_buy",
+      "half_buy",
+      "eco"
+    ],
+    "reason_tags": [
+      [
+        "4v5",
+        "掉线",
+        "人数",
+        "man down",
+        "disconnect",
+        "四个人"
+      ],
+      [
+        "硬打",
+        "执行",
+        "execute",
+        "道具",
+        "utility"
+      ]
+    ],
+    "notes": "4v5 man-down. 3000 affords a rifle-less kit at best for most; any honest label accepted, but the reason must name the man-count."
+  }
+}

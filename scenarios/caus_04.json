@@ -1,0 +1,48 @@
+{
+  "id": "caus_04",
+  "map": "Nuke",
+  "side": "CT",
+  "score": {
+    "us": 6,
+    "them": 8
+  },
+  "economy": {
+    "us_avg": 5100,
+    "them_avg": 4200
+  },
+  "recent_rounds": [
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "T方在outside做假, 我们全队轮转下去, A点空了被秒"
+    },
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "同样的outside假动作, 我们又全轮转, A点又空"
+    },
+    {
+      "round": 16,
+      "result": "loss",
+      "detail": "第三次中同一个假, A点还是没人"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "fake",
+        "假",
+        "做假"
+      ],
+      [
+        "轮转",
+        "rotate",
+        "rotation"
+      ]
+    ],
+    "notes": "Falling for the same fake three rounds running."
+  }
+}

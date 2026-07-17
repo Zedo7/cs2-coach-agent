@@ -1,0 +1,49 @@
+{
+  "id": "normal_02",
+  "map": "Inferno",
+  "side": "CT",
+  "score": {
+    "us": 8,
+    "them": 6
+  },
+  "economy": {
+    "us_avg": 5200,
+    "them_avg": 4300
+  },
+  "recent_rounds": [
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "T方用四颗雷+烟强开banana, 我们两个人被雷炸死没换到人"
+    },
+    {
+      "round": 16,
+      "result": "loss",
+      "detail": "banana又被同样的雷阵清掉, 失去控制权后B点被打穿"
+    },
+    {
+      "round": 17,
+      "result": "loss",
+      "detail": "banana道具压制下我们直接弃点, T方免费拿控制权"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "banana",
+        "香蕉"
+      ],
+      [
+        "utility",
+        "道具",
+        "雷",
+        "grenade",
+        "nade"
+      ]
+    ],
+    "notes": "Utility-driven banana control loss; CT economy healthy."
+  }
+}

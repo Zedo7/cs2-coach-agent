@@ -1,0 +1,34 @@
+{
+  "id": "edge_03",
+  "map": "Dust2",
+  "side": "T",
+  "score": {
+    "us": 0,
+    "them": 0
+  },
+  "economy": {
+    "us_avg": 800,
+    "them_avg": 800
+  },
+  "recent_rounds": [],
+  "expected": {
+    "buy_type": [
+      "eco",
+      "force_buy"
+    ],
+    "reason_tags": [
+      [
+        "手枪",
+        "pistol",
+        "第一回合",
+        "first round",
+        "开局",
+        "no prior",
+        "没有",
+        "尚未",
+        "n/a"
+      ]
+    ],
+    "notes": "Pistol round: recent_rounds is EMPTY. There is no loss to explain — an honest loss_reason must say so rather than invent one. Tests hallucination under a schema that requires the field."
+  }
+}

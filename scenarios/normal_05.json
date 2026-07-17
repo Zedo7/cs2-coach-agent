@@ -1,0 +1,47 @@
+{
+  "id": "normal_05",
+  "map": "Ancient",
+  "side": "T",
+  "score": {
+    "us": 6,
+    "them": 6
+  },
+  "economy": {
+    "us_avg": 4400,
+    "them_avg": 4500
+  },
+  "recent_rounds": [
+    {
+      "round": 11,
+      "result": "loss",
+      "detail": "B执行在donut被交叉火力卡住, 进不去点"
+    },
+    {
+      "round": 12,
+      "result": "loss",
+      "detail": "B又打, donut的交叉点没处理, 又死两个"
+    },
+    {
+      "round": 13,
+      "result": "loss",
+      "detail": "B执行第三次, 还是donut交叉火力, 直接崩"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "donut",
+        "b点",
+        " b "
+      ],
+      [
+        "crossfire",
+        "交叉"
+      ]
+    ],
+    "notes": "B/donut crossfire unaddressed for three rounds."
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "id": "edge_02",
+  "map": "Inferno",
+  "side": "CT",
+  "score": {
+    "us": 14,
+    "them": 15
+  },
+  "economy": {
+    "us_avg": 4700,
+    "them_avg": 5900
+  },
+  "recent_rounds": [
+    {
+      "round": 27,
+      "result": "loss",
+      "detail": "赛点局, banana丢了控制权, B被打穿"
+    },
+    {
+      "round": 28,
+      "result": "loss",
+      "detail": "又是banana, 同样的道具压制, 直接输"
+    },
+    {
+      "round": 29,
+      "result": "loss",
+      "detail": "banana第三次丢, 现在14-15落后"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "banana",
+        "香蕉"
+      ],
+      [
+        "控制",
+        "control",
+        "道具",
+        "utility"
+      ]
+    ],
+    "notes": "14-15 match point, must-win. Full buy affordable; no reason to save."
+  }
+}

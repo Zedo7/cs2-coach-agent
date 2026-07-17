@@ -1,0 +1,52 @@
+{
+  "id": "caus_02",
+  "map": "Inferno",
+  "side": "T",
+  "score": {
+    "us": 5,
+    "them": 7
+  },
+  "economy": {
+    "us_avg": 4500,
+    "them_avg": 4800
+  },
+  "recent_rounds": [
+    {
+      "round": 10,
+      "result": "loss",
+      "detail": "A执行没扔任何烟和闪, 直接dry进点, 死三个"
+    },
+    {
+      "round": 11,
+      "result": "loss",
+      "detail": "A又是dry进点, 全队道具一个没用, 死四个"
+    },
+    {
+      "round": 12,
+      "result": "loss",
+      "detail": "A第三次dry, 道具还是全带回家了"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "dry",
+        "硬冲",
+        "干拉"
+      ],
+      [
+        "道具",
+        "utility",
+        "nade",
+        "烟",
+        "闪",
+        "smoke",
+        "flash"
+      ]
+    ],
+    "notes": "Zero utility used on three consecutive executes."
+  }
+}

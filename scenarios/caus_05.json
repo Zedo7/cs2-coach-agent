@@ -1,0 +1,50 @@
+{
+  "id": "caus_05",
+  "map": "Ancient",
+  "side": "T",
+  "score": {
+    "us": 7,
+    "them": 8
+  },
+  "economy": {
+    "us_avg": 4600,
+    "them_avg": 4700
+  },
+  "recent_rounds": [
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "A点下包位置太靠前, 被CT从default直接架住拆掉"
+    },
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "又下同一个包点, post-plant站位被同样打法清掉"
+    },
+    {
+      "round": 16,
+      "result": "loss",
+      "detail": "第三次同一个下包点, 残局守不住"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "下包",
+        "plant",
+        "包点",
+        "包位"
+      ],
+      [
+        "post-plant",
+        "残局",
+        "守不住",
+        "retake"
+      ]
+    ],
+    "notes": "Same bad plant spot losing the post-plant three times."
+  }
+}

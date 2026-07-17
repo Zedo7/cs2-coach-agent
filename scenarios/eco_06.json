@@ -1,0 +1,53 @@
+{
+  "id": "eco_06",
+  "map": "Overpass",
+  "side": "T",
+  "score": {
+    "us": 7,
+    "them": 10
+  },
+  "economy": {
+    "us_avg": 2200,
+    "them_avg": 5500
+  },
+  "recent_rounds": [
+    {
+      "round": 17,
+      "result": "loss",
+      "detail": "B点water被烟封住看不见, 我们硬冲死三个"
+    },
+    {
+      "round": 18,
+      "result": "loss",
+      "detail": "B又硬冲water, 同样死三个"
+    },
+    {
+      "round": 19,
+      "result": "loss",
+      "detail": "B第三次硬冲, 还是没有先手道具"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "force_buy",
+      "half_buy",
+      "eco"
+    ],
+    "reason_tags": [
+      [
+        "water",
+        "b点",
+        " b "
+      ],
+      [
+        "硬冲",
+        "道具",
+        "utility",
+        "nade",
+        "无脑",
+        "dry"
+      ]
+    ],
+    "notes": "2200: SMG force ceiling; repeated dry B pushes."
+  }
+}

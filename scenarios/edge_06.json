@@ -1,0 +1,50 @@
+{
+  "id": "edge_06",
+  "map": "Mirage",
+  "side": "T",
+  "score": {
+    "us": 9,
+    "them": 9
+  },
+  "economy": {
+    "us_avg": 4200,
+    "them_avg": 4200
+  },
+  "recent_rounds": [
+    {
+      "round": 17,
+      "result": "loss",
+      "detail": "B点被烟封住, 我们没有molotov清点, 硬冲死两个"
+    },
+    {
+      "round": 18,
+      "result": "loss",
+      "detail": "B又没有molotov, 同样的点位清不掉"
+    },
+    {
+      "round": 19,
+      "result": "loss",
+      "detail": "B第三次, 还是没带molotov"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "molotov",
+        "燃烧",
+        "火"
+      ],
+      [
+        "b点",
+        " b ",
+        "b site",
+        "点位",
+        "清点"
+      ]
+    ],
+    "notes": "Boundary: 4200 exactly equals ak47+kevlar_helmet+flash+smoke. Off-by-one on the budget check surfaces here."
+  }
+}

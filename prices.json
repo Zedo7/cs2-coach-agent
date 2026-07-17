@@ -1,0 +1,31 @@
+{
+  "source": "https://op.gg/cs2/weapons",
+  "as_of": "2026-07-17",
+  "note": "Scraped from op.gg per-weapon detail pages (server-rendered 'Price' field). The deterministic budget gate is only as correct as this table -- re-verify against the source when CS2 economy patches land, and bump as_of.",
+  "excluded": {
+    "glock": "default pistol, not a buy item -- deliberately absent so budget_check flags it as unknown",
+    "usp": "default pistol (CT), same reason",
+    "p2000": "default pistol (CT), same reason"
+  },
+  "prices": {
+    "ak47": 2700,
+    "m4a1s": 2900,
+    "m4a4": 2900,
+    "awp": 4750,
+    "galil": 1800,
+    "famas": 1950,
+    "ssg08": 1700,
+    "mac10": 1050,
+    "mp9": 1250,
+    "deagle": 700,
+    "p250": 300,
+    "kevlar": 650,
+    "kevlar_helmet": 1000,
+    "defuse_kit": 400,
+    "he": 300,
+    "flash": 200,
+    "smoke": 300,
+    "molotov": 400,
+    "incendiary": 500
+  }
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "scenario": "normal_01",
+    "group": "normal",
+    "config": "full",
+    "status": "OK",
+    "buy_type": "full_buy",
+    "buy_ok": true,
+    "cost": 4500,
+    "budget_ok": true,
+    "problems": [],
+    "generic": false,
+    "tag_cov": 1.0,
+    "attempts": 1,
+    "tokens": 11485,
+    "usd": 0.07514950000000001,
+    "seconds": 33.79700000000048,
+    "loss_reason": "Same window AWP punished us three rounds straight: R8 we lost mid control and he got a double off window, R9 he picked our entry at window on another slow mid push, R10 we ran an A execute but never smoked mid so he one-tapped our entry fragger through window. Common cause: we never smoke window out of the play."
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "id": "eco_01",
+  "map": "Mirage",
+  "side": "T",
+  "score": {
+    "us": 2,
+    "them": 10
+  },
+  "economy": {
+    "us_avg": 750,
+    "them_avg": 6200
+  },
+  "recent_rounds": [
+    {
+      "round": 12,
+      "result": "loss",
+      "detail": "全队被打光, 枪全掉了, 经济归零"
+    },
+    {
+      "round": 13,
+      "result": "loss",
+      "detail": "强起失败, 又白给五个人"
+    },
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "连续强起, 一分钱没剩, 对面满装"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "eco"
+    ],
+    "reason_tags": [
+      [
+        "强起",
+        "force"
+      ],
+      [
+        "经济",
+        "money",
+        "economy",
+        "枪"
+      ]
+    ],
+    "notes": "750 per player: only a true eco is honest. Anything else is a mislabel."
+  }
+}

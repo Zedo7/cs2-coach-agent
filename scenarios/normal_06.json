@@ -1,0 +1,48 @@
+{
+  "id": "normal_06",
+  "map": "Overpass",
+  "side": "CT",
+  "score": {
+    "us": 7,
+    "them": 8
+  },
+  "economy": {
+    "us_avg": 4900,
+    "them_avg": 4700
+  },
+  "recent_rounds": [
+    {
+      "round": 14,
+      "result": "loss",
+      "detail": "A点被monster和long同时split, 我们两个人被分割各自死"
+    },
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "同样的monster+long split, 补防没到位"
+    },
+    {
+      "round": 16,
+      "result": "loss",
+      "detail": "A又被split, monster方向完全没人看"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "monster",
+        "a点",
+        " a "
+      ],
+      [
+        "split",
+        "分割",
+        "夹击"
+      ]
+    ],
+    "notes": "A split via monster repeated; CT economy healthy."
+  }
+}

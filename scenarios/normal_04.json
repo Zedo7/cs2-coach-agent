@@ -1,0 +1,46 @@
+{
+  "id": "normal_04",
+  "map": "Nuke",
+  "side": "CT",
+  "score": {
+    "us": 9,
+    "them": 5
+  },
+  "economy": {
+    "us_avg": 5000,
+    "them_avg": 3900
+  },
+  "recent_rounds": [
+    {
+      "round": 15,
+      "result": "loss",
+      "detail": "outside被T方拿下, ramp防守只有一个人直接被冲穿"
+    },
+    {
+      "round": 16,
+      "result": "loss",
+      "detail": "outside又丢, ramp补防太慢, 下层被拿"
+    },
+    {
+      "round": 17,
+      "result": "loss",
+      "detail": "outside控制权全丢, ramp直接被四个人压进来"
+    }
+  ],
+  "expected": {
+    "buy_type": [
+      "full_buy"
+    ],
+    "reason_tags": [
+      [
+        "outside",
+        "外场"
+      ],
+      [
+        "ramp",
+        "斜坡"
+      ]
+    ],
+    "notes": "Outside/ramp control loss repeated three rounds."
+  }
+}

@@ -1,6 +1,8 @@
 .env
 .env.*
 !.env.example
+.cache/
+results/eval.log
 __pycache__/
 *.pyc
 .venv/
