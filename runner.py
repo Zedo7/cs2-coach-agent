@@ -92,8 +92,13 @@ async def run_agent(
     client: Optional[anthropic.AsyncAnthropic] = None,
     model: str = MODEL,
     max_attempts: int = 3,
+    extra_context: Optional[str] = None,
 ) -> AsyncIterator[TraceEvent]:
-    """Drive one full coaching run, yielding trace events. Terminal event is `final`."""
+    """Drive one full coaching run, yielding trace events. Terminal event is `final`.
+
+    extra_context (session layer only) is appended to the doer prompt every attempt --
+    compaction synopsis + adaptation pressure. None by default, so standalone runs are
+    unchanged. The agent's own system prompts are never modified."""
     cfg = CONFIGS[config]
     own_client = client is None
     client = client or anthropic.AsyncAnthropic()
@@ -114,7 +119,10 @@ async def run_agent(
             yield TraceEvent("attempt_started", {"attempt": attempt})
 
             # --- doer tool loop -------------------------------------------------
-            messages = [{"role": "user", "content": build_doer_prompt(match, feedback)}]
+            prompt = build_doer_prompt(match, feedback)
+            if extra_context:
+                prompt += "\n\n" + extra_context
+            messages = [{"role": "user", "content": prompt}]
             for _ in range(MAX_TOOL_ITERATIONS):
                 r = await client.messages.create(
                     model=model, max_tokens=4000, system=DOER_SYSTEM,

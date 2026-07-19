@@ -10,18 +10,18 @@ import json
 import sys
 from pathlib import Path
 
-from agent import PRICES, PRICES_AS_OF, PRICES_SOURCE, budget_check, build_doer_prompt
+from agent import (
+    FULL_BUY_KIT, PRICES, PRICES_AS_OF, PRICES_SOURCE, budget_check, build_doer_prompt,
+)
 
 ROOT = Path(__file__).parent
 BUY_TYPES = {"full_buy", "force_buy", "half_buy", "eco"}
 
-# NOTE: keep in sync with the ~$4200 full_buy floor stated in agent.DOER_SYSTEM.
-# Only full_buy has a hard economic floor: it means a rifle plus armour plus utility,
-# and below that price the label is simply a lie. eco / force_buy / half_buy are
-# spend-level labels with no floor -- an eco may be an empty list, a p250, or a deagle;
-# a force buy at $1200 is a p250 + kevlar. Testing those against a fixed "representative
-# kit" would encode the very assumption this validator exists to protect against.
-FULL_BUY_KIT = ["ak47", "kevlar_helmet", "flash", "smoke"]
+# FULL_BUY_KIT is imported from agent (single source). Only full_buy has a hard economic
+# floor: it means a rifle plus armour plus utility, and below that price the label is a
+# lie. eco / force_buy / half_buy are spend-level labels with no floor -- testing those
+# against a fixed kit would encode the very assumption this validator exists to protect
+# against, so only full_buy is floored here.
 FLOORED_LABELS = {"full_buy": FULL_BUY_KIT}
 
 

@@ -6,6 +6,8 @@ results/eval.log
 results/service.log
 __pycache__/
 .pytest_cache/
+demos/
+matches/
 *.pyc
 .venv/
 venv/

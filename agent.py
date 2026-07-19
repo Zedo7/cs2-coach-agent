@@ -18,10 +18,46 @@ _PRICES_FILE = json.loads((Path(__file__).parent / "prices.json").read_text(enco
 PRICES = _PRICES_FILE["prices"]
 PRICES_SOURCE, PRICES_AS_OF = _PRICES_FILE["source"], _PRICES_FILE["as_of"]
 
-# NOTE: the ~$4200 full_buy floor below must stay in sync with FULL_BUY_KIT in
-# validate_scenarios.py (ak47 + kevlar_helmet + flash + smoke). If prices.json changes
-# that kit's cost, update both — the prompt teaches the model the floor, the validator
-# enforces the same floor on the answer keys.
+
+def kit_cost(items):
+    return sum(PRICES[i] for i in items)
+
+
+# Representative full buy, priced from PRICES. Single economic reference shared by the
+# answer-key validator (validate_scenarios), the readiness check (service.healthz), and
+# demo ingestion (ingest) -- do not re-hardcode buy costs in any of those.
+FULL_BUY_KIT = ["ak47", "kevlar_helmet", "flash", "smoke"]
+
+# Ascending, price-derived anchors for classifying an OBSERVED freeze-time equipment
+# value (from a parsed demo) into a buy_type. These are a heuristic read of what a team
+# fielded, NOT a buy-intent judgement: half_buy and force_buy differ only by utility, so
+# their boundary is soft. Kept here so the thresholds move with the price table instead
+# of being a third independent copy of the economy assumptions.
+_CLASSIFY_KITS = {
+    "eco": ["p250"],
+    "half_buy": ["mac10", "kevlar"],
+    "force_buy": ["mac10", "kevlar", "flash"],
+    "full_buy": FULL_BUY_KIT,
+}
+
+
+def classify_equip_value(equip_value):
+    """Bucket a per-player equipment value into pistol|eco|half_buy|force_buy|full_buy
+    using the same PRICES the budget gate uses. Below a p250 is 'pistol' (default sidearm
+    only). Returns None for a missing/negative value."""
+    if equip_value is None or equip_value < 0:
+        return None
+    if equip_value < kit_cost(_CLASSIFY_KITS["eco"]):
+        return "pistol"
+    result = "eco"
+    for bt in ("half_buy", "force_buy", "full_buy"):
+        if equip_value >= kit_cost(_CLASSIFY_KITS[bt]):
+            result = bt
+    return result
+
+# NOTE: the ~$4200 full_buy floor below is FULL_BUY_KIT (defined above), priced from
+# PRICES. The prompt teaches the model the floor; the validator enforces the same floor
+# on the answer keys; ingest classifies against the same anchors. One source, no drift.
 DOER_SYSTEM = """You are the in-game leader of a CS2 team. You get the match state and the
 last few rounds. Give the call for the NEXT round only.
 

@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 import agent
 from runner import CONFIGS, TraceEvent, run_agent
+from sessions import Call, RoundOutcome, SessionStore, build_grounding
 
 ROOT = Path(__file__).parent
 
@@ -42,6 +43,9 @@ MAX_ATTEMPTS = int(os.getenv("COACH_MAX_ATTEMPTS", "3"))
 RETRY_AFTER = int(os.getenv("COACH_RETRY_AFTER", "10"))
 LOG_LEVEL = os.getenv("COACH_LOG_LEVEL", "INFO").upper()
 SSE_PING_SECONDS = 15.0
+SESSION_WINDOW = int(os.getenv("COACH_SESSION_WINDOW", "5"))
+SESSION_TTL = float(os.getenv("COACH_SESSION_TTL", "1800"))
+COMPACT_BATCH = int(os.getenv("COACH_COMPACT_BATCH", "5"))
 
 # --- structured logging ------------------------------------------------------
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
@@ -109,6 +113,7 @@ class RunSlots:
 
 
 slots = RunSlots(MAX_CONCURRENT)
+store = SessionStore(ttl_seconds=SESSION_TTL, window=SESSION_WINDOW, compact_batch=COMPACT_BATCH)
 
 
 def make_client() -> anthropic.AsyncAnthropic:
@@ -151,6 +156,33 @@ class ConfigName(str, Enum):
     no_verifier = "no_verifier"
     no_hard_gate = "no_hard_gate"
     doer_only = "doer_only"
+
+
+class CreateSession(BaseModel):
+    map: str = Field(min_length=1)
+    us_team: str = Field(min_length=1)
+    window: Optional[int] = Field(default=None, ge=1, le=30)
+
+
+class RoundIn(BaseModel):
+    """A real round outcome submitted to the ledger (a rounds.jsonl record)."""
+    model_config = ConfigDict(extra="allow")
+    round: int
+    our_side: Literal["T", "CT"]
+    their_side: Literal["T", "CT"]
+    result: Literal["win", "loss"]
+    winner: Literal["us", "them"]
+    score_after: dict
+    economy: dict
+    buy: dict
+    detail: str
+
+
+class CoachIn(BaseModel):
+    """The known context for the UPCOMING round: our side + freeze-time money."""
+    round: int
+    our_side: Literal["T", "CT"]
+    economy: Economy
 
 
 # --- app ---------------------------------------------------------------------
@@ -299,6 +331,102 @@ async def coach_stream(body: MatchState, config: ConfigName = Query(ConfigName.f
         "X-Request-ID": rid, "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+def _session_state(s) -> dict:
+    return {"session_id": s.id, "map": s.map, "us_team": s.us_team, "window": s.window,
+            "rounds_submitted": len(s.outcomes), "calls_made": len(s.calls),
+            "compacted_batches": s.compacted_batches,
+            "score": s.outcomes[-1].score_after if s.outcomes else {"us": 0, "them": 0}}
+
+
+@app.post("/v1/sessions")
+async def create_session(body: CreateSession):
+    s = store.create(map=body.map, us_team=body.us_team, window=body.window)
+    _log(logging.INFO, "session_created", session_id=s.id, map=s.map)
+    return JSONResponse(_session_state(s), status_code=201)
+
+
+@app.get("/v1/sessions/{sid}")
+async def get_session(sid: str):
+    try:
+        return _session_state(store.get(sid))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="session not found or expired")
+
+
+@app.delete("/v1/sessions/{sid}")
+async def delete_session(sid: str):
+    store.delete(sid)
+    return JSONResponse({"deleted": sid}, status_code=200)
+
+
+@app.post("/v1/sessions/{sid}/round")
+async def submit_round(sid: str, body: RoundIn):
+    try:
+        s = store.submit_round(sid, RoundOutcome(**body.model_dump()))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="session not found or expired")
+    _log(logging.INFO, "round_submitted", session_id=sid, round=body.round, result=body.result)
+    return _session_state(s)
+
+
+@app.post("/v1/sessions/{sid}/coach")
+async def coach_session(sid: str, body: CoachIn, config: ConfigName = Query(ConfigName.full)):
+    """Stream the agent's call for the UPCOMING round, grounded in the session ledger.
+    Emits a `compaction` event (batched, deterministic) when older rounds fold out of the
+    detail window, then the normal run trace. Records the call back into the ledger."""
+    rid = request_id_var.get()
+    try:
+        session = store.get(sid)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="session not found or expired")
+    if not await slots.try_acquire():
+        _log(logging.WARNING, "rejected_at_capacity", session_id=sid)
+        raise HTTPException(status_code=429, detail="server at capacity",
+                            headers={"Retry-After": str(RETRY_AFTER)})
+
+    recent_rounds, extra_context, compaction_event = build_grounding(session, COMPACT_BATCH)
+    score = session.outcomes[-1].score_after if session.outcomes else {"us": 0, "them": 0}
+    match = {"map": session.map, "side": body.our_side, "score": score,
+             "economy": body.economy.model_dump(), "recent_rounds": recent_rounds}
+    client = make_client()
+
+    async def gen():
+        request_id_var.set(rid)
+        try:
+            if compaction_event:
+                _log(logging.INFO, "compaction", session_id=sid, **compaction_event)
+                yield TraceEvent("compaction", {"session_id": sid, **compaction_event}).sse()
+            agen = run_agent(match, config=config.value, request_id=rid, client=client,
+                             model=MODEL, max_attempts=MAX_ATTEMPTS, extra_context=extra_context)
+            async for kind, ev in _pump(agen, RUN_TIMEOUT, ping=SSE_PING_SECONDS):
+                if kind == "ping":
+                    yield ": ping\n\n"
+                    continue
+                if ev.event == "final":
+                    p = ev.data["plan"]
+                    store.record_call(sid, Call(round=body.round, buy_type=p["buy_type"],
+                                                buy=p["buy"], cost=ev.data["cost"],
+                                                approved=ev.data["approved"],
+                                                attempts=ev.data["attempts"]))
+                    _log(logging.INFO, "run_done", session_id=sid, round=body.round,
+                         approved=ev.data["approved"], cost_usd=ev.data["usage"]["cost_usd"])
+                yield ev.sse()
+        except asyncio.TimeoutError:
+            _log(logging.ERROR, "run_timeout", session_id=sid, seconds=RUN_TIMEOUT)
+            yield TraceEvent("error", {"request_id": rid, "error": "run exceeded timeout",
+                                       "phase": "timeout", "partial": True}).sse()
+        except Exception as e:
+            _log(logging.ERROR, "run_error", session_id=sid, error=f"{type(e).__name__}: {e}")
+            yield TraceEvent("error", {"request_id": rid, "error": f"{type(e).__name__}: {e}",
+                                       "phase": "exception", "partial": True}).sse()
+        finally:
+            await client.close()
+            await slots.release()
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={
+        "X-Request-ID": rid, "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/healthz")
 async def healthz():
     """Liveness is implicit (we answered). Readiness: key present, prices load, and the
@@ -311,8 +439,8 @@ async def healthz():
         checks["prices_loaded"] = False
     try:
         scen = json.loads((ROOT / "scenarios" / "normal_01.json").read_text(encoding="utf-8"))
-        kit = ["ak47", "kevlar_helmet", "flash", "smoke"]  # representative full buy
-        _, probs = agent.budget_check({"buy": kit, "per_player_spend": sum(agent.PRICES[i] for i in kit)},
+        kit = agent.FULL_BUY_KIT  # single source: same representative full buy the validator uses
+        _, probs = agent.budget_check({"buy": kit, "per_player_spend": agent.kit_cost(kit)},
                                       scen["economy"]["us_avg"])
         checks["validator"] = ("full_buy" in scen["expected"]["buy_type"]) and not probs
     except Exception:

@@ -52,6 +52,97 @@ CS2 经济改动后需要重新核对并更新 `as_of`。默认手枪（glock/us
 重跑，会原样返回旧价格下算出的旧方案，delta 显示为 0 而看不出任何问题。现在 doer 的 cache key
 里显式包含了 `PRICES` 和 `doer_model`。凡是通过工具结果影响模型的输入，都得进 key。
 
+## Real match replay
+
+v0.4 closes the loop: a real parsed demo feeds a coaching session, round by round.
+
+```
+ .dem (CS2 demo)
+   │  ingest.py  — demoparser2: per-round winner, side, freeze-time economy,
+   │              buy characterization, auto detail string
+   ▼
+ matches/<id>/rounds.jsonl  +  meta.json
+   │  replay.py  — for each round: ask the agent for its call (grounded only in
+   │              earlier rounds), then reveal the real outcome to the ledger
+   ▼
+ session (in-memory)
+   ├─ structured ledger: outcomes submitted + calls made
+   ├─ K-round detail window (default 5)
+   ├─ deterministic compaction of older rounds  → `compaction` SSE event
+   ├─ adaptation pressure: losing while repeating yourself → prompt injection
+   └─ TTL expiry, no DB
+   ▼
+ replay_report.md  — per round: agent's call vs the team's real buy vs result
+```
+
+**Why replay-driven coaching is the product loop.** A scenario file is a snapshot; a
+session is the actual job — coaching a match as it unfolds, with memory of what already
+happened and pressure to adapt when the same call keeps losing. Driving a real parsed
+demo through a session is the smallest honest end-to-end test of that: real economy, real
+outcomes, the agent committing a call *before* it sees the result. The same parsed data is
+also the path to grounding the eval: today's 24 scenarios are hand-authored, so their
+economy/result distributions are guesses. **Roadmap (not built):** mine `rounds.jsonl`
+across many demos to generate scenarios from the real distribution of economies, loss
+patterns, and scorelines — replacing authored guesses with sampled reality.
+
+**Compaction is deterministic** (`"type": "deterministic"` in the event and here): older
+rounds fold into a counted synopsis (W/L record, economy trend, most common loss tail) — a
+pure aggregation, no model call, $0. **Roadmap (not built):** a model-summary compaction
+would capture tactical nuance a counter cannot (why the losses clustered, not just that
+they did) — higher fidelity, at the cost of a model call per fold.
+
+### Ingest a demo
+
+```sh
+python ingest.py demos/furia-vs-falcons-m3-inferno.dem \
+  --match-id furia-falcons-inferno --us-team "FURIA"
+# confirm parser fields against a specific demo first:
+python ingest.py <demo> --probe
+```
+
+`--us-team` fixes which clan is "us" (default: the team starting on CT). Ingestion
+extracts economy + results + details only — no positions/coordinates/ML features (see the
+`RICHER-EXTRACTION HOOK` comment in `ingest.py` for where richer extraction plugs in).
+
+Two deliberate modelling choices, verified against a real match (FURIA vs Falcons, m3
+Inferno) by a domain expert who watched it:
+
+- **Pistol rounds classify as `eco`, not a separate label.** With armour + utility a
+  pistol-round loadout is equip ≥ $300, which reads as `eco` on the price ladder. We do
+  not add a `pistol_buy` label for the two pistol rounds a match has.
+- **Buy type is read from equipment *fielded* at freeze-end (carried weapons included),
+  not cash spent this round.** A survivor carrying a rifle into the next round shows a
+  `full_buy` even on low cash — which is the correct signal for a coach ("what do they
+  have?"), but it means the `buy` field is intentionally decoupled from the `economy`
+  (available-money) column. They answer different questions.
+
+Team identity is anchored to the clan name (`team_clan_name`), not the side, so it
+survives the halftime swap; side is read at the freeze-end tick because the swap has not
+yet registered at the round-start tick of the first round after the half.
+
+### Session endpoints
+
+| method | path | purpose |
+|---|---|---|
+| `POST` | `/v1/sessions` | create a session (`map`, `us_team`, optional `window`) |
+| `POST` | `/v1/sessions/{id}/round` | submit a real round outcome to the ledger |
+| `POST` | `/v1/sessions/{id}/coach` | stream the agent's call for the upcoming round (SSE) |
+| `GET` | `/v1/sessions/{id}` | session state (score, rounds, calls) |
+| `DELETE` | `/v1/sessions/{id}` | end a session |
+
+Extra env vars: `COACH_SESSION_WINDOW` (5), `COACH_SESSION_TTL` (1800s),
+`COACH_COMPACT_BATCH` (5).
+
+### Replay a match
+
+```sh
+python replay.py matches/<id>/rounds.jsonl --rounds 8 --model claude-haiku-4-5
+```
+
+Produces `replay_report.md` — per round, the agent's call vs the team's actual buy vs the
+real result. Agreement is *not* accuracy (the team's real buy isn't ground truth for the
+optimal call); the report is the closed-loop demo, not an eval.
+
 ## Run as a service
 
 v0.3 wraps the agent in a FastAPI service. The agent core is untouched; `runner.py`
