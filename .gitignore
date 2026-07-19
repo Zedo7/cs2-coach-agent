@@ -3,7 +3,9 @@
 !.env.example
 .cache/
 results/eval.log
+results/service.log
 __pycache__/
+.pytest_cache/
 *.pyc
 .venv/
 venv/

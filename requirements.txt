@@ -1,0 +1,7 @@
+anthropic>=0.116
+# service layer (v0.3)
+fastapi>=0.110
+uvicorn>=0.29
+# tests (no real API calls)
+pytest>=8.0
+httpx>=0.27

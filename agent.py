@@ -153,11 +153,6 @@ def load_env(path=".env"):
             os.environ.setdefault(k.strip(), v.strip().strip("'\""))
 
 
-def parse(response):
-    text = next(b.text for b in response.content if b.type == "text")
-    return json.loads(text)
-
-
 def budget_check(plan, avg_money):
     """Deterministic cost math, so the Verifier never has to trust the Doer's arithmetic."""
     unknown = [i for i in plan["buy"] if i not in PRICES]
@@ -215,61 +210,6 @@ def summarize(result):
     return s if len(s) <= 160 else s[:157] + "..."
 
 
-def doer(client, match, feedback=None):
-    """Agentic loop: the model calls tools until it is ready, then emits the plan."""
-    messages = [{"role": "user", "content": build_doer_prompt(match, feedback)}]
-
-    for i in range(MAX_TOOL_ITERATIONS):
-        r = client.messages.create(
-            model=MODEL,
-            max_tokens=4000,
-            system=DOER_SYSTEM,
-            thinking={"type": "adaptive"},
-            output_config={"effort": "high"},
-            tools=DOER_TOOLS,
-            # Auto-caches the last cacheable block, i.e. the end of the conversation
-            # so far. Each turn reads the prefix the previous turn wrote — this is
-            # where the cost lives, since the loop resends a growing history 5x.
-            # tools+system alone is only ~1.1k tokens, under the 4096 minimum, so a
-            # separate static breakpoint would silently never cache.
-            cache_control={"type": "ephemeral"},
-            messages=messages,
-        )
-        # Echo the whole assistant turn back, thinking blocks included.
-        messages.append({"role": "assistant", "content": r.content})
-
-        tool_uses = [b for b in r.content if b.type == "tool_use"]
-        if not tool_uses:
-            break
-
-        results = []
-        for tu in tool_uses:
-            result = run_tool(match, tu.name, tu.input)
-            print(f"  [tool] {tu.name}({json.dumps(tu.input, ensure_ascii=False)}) -> {summarize(result)}")
-            results.append({
-                "type": "tool_result",
-                "tool_use_id": tu.id,
-                "content": json.dumps(result, ensure_ascii=False),
-            })
-        messages.append({"role": "user", "content": results})
-    else:
-        print(f"  [tool] iteration cap ({MAX_TOOL_ITERATIONS}) reached — forcing final plan")
-
-    # Final turn: same conversation, now constrained to the plan schema.
-    messages.append({"role": "user", "content": "Now output the final plan for the next round."})
-    final = client.messages.create(
-        model=MODEL,
-        max_tokens=4000,
-        system=DOER_SYSTEM,
-        thinking={"type": "adaptive"},
-        output_config={"effort": "high", "format": {"type": "json_schema", "schema": DOER_SCHEMA}},
-        tools=DOER_TOOLS,
-        cache_control={"type": "ephemeral"},
-        messages=messages,
-    )
-    return parse(final)
-
-
 def build_verifier_facts(match):
     # Decoupling: the Verifier gets facts + the plan only — never the Doer's system
     # prompt, thinking, or narration. Different persona, different effort, no thinking,
@@ -303,18 +243,6 @@ def build_doer_prompt(match, feedback=None):
     return content
 
 
-def verifier(client, match, plan, computed_cost):
-    r = client.messages.create(
-        model=MODEL,
-        max_tokens=2000,
-        system=VERIFIER_SYSTEM,
-        thinking={"type": "disabled"},
-        output_config={"effort": "low", "format": {"type": "json_schema", "schema": VERIFIER_SCHEMA}},
-        messages=[{"role": "user", "content": build_verifier_prompt(match, plan, computed_cost)}],
-    )
-    return parse(r)
-
-
 def main():
     # Round details and instructions are Chinese; a cp1252 console would die on them.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -323,35 +251,22 @@ def main():
         sys.exit("ANTHROPIC_API_KEY is not set. Put it in a .env file (see .env.example).")
 
     path = sys.argv[1] if len(sys.argv) > 1 else "sample_match.json"
+    config = sys.argv[2] if len(sys.argv) > 2 else "full"
     with open(path, encoding="utf-8") as f:
         match = json.load(f)
 
-    client = anthropic.Anthropic()
-    feedback = None
+    # CLI and the HTTP service share one trace source: runner.run_agent. The CLI just
+    # renders each event as a line. Imported here (not at top) to avoid a circular
+    # import, since runner imports agent.
+    import asyncio
 
-    for attempt in range(1, 4):
-        plan = doer(client, match, feedback)
-        cost, hard_problems = budget_check(plan, match["economy"]["us_avg"])
-        audit = verifier(client, match, plan, cost)
+    import runner
 
-        issues = hard_problems + (audit["issues"] if not audit["approved"] else [])
-        approved = audit["approved"] and not hard_problems
+    async def go():
+        async for ev in runner.run_agent(match, config=config, request_id="cli"):
+            print(runner.format_cli(ev))
 
-        print(f"\n--- attempt {attempt} ---")
-        print(f"loss reason : {plan['loss_reason']}")
-        print(f"buy         : {plan['buy_type']} — {', '.join(plan['buy'])} (~${cost}/player)")
-        print(f"instruction : {plan['instruction']}")
-        print(f"verifier    : {'APPROVED' if approved else 'REJECTED'}")
-        for i in issues:
-            print(f"  - {i}")
-
-        if approved:
-            print("\n=== NEXT ROUND CALL ===")
-            print(f"{plan['buy_type'].replace('_', ' ').upper()}: {', '.join(plan['buy'])}")
-            print(plan["instruction"])
-            return
-
-        feedback = issues
+    asyncio.run(go())
 
     print("\nNo plan passed the verifier after 3 attempts.")
 

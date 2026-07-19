@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cs2-coach-agent · live trace</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; margin: 0; padding: 1.2rem;
+         max-width: 900px; margin-inline: auto; }
+  h1 { font-size: 1.1rem; margin: 0 0 .2rem; }
+  p.sub { margin: 0 0 1rem; opacity: .7; }
+  textarea { width: 100%; height: 190px; box-sizing: border-box; font: inherit; padding: .6rem; }
+  .row { display: flex; gap: .6rem; align-items: center; margin: .6rem 0; flex-wrap: wrap; }
+  button, select { font: inherit; padding: .4rem .8rem; }
+  button { cursor: pointer; }
+  #trace { border: 1px solid #8884; border-radius: 6px; padding: .6rem; margin-top: .8rem;
+           min-height: 120px; white-space: pre-wrap; }
+  .ev { padding: .15rem .3rem; border-left: 3px solid transparent; }
+  .ev b { display: inline-block; min-width: 150px; }
+  .tool_call { border-color: #6ac; } .doer_plan { border-color: #9c6; }
+  .budget_check { border-color: #ca6; } .verifier_verdict { border-color: #c6a; }
+  .attempt_rejected { border-color: #c66; } .final { border-color: #6c6; background: #6c61; }
+  .error { border-color: #f44; background: #f441; }
+  .final b, .error b { min-width: auto; }
+</style>
+</head>
+<body>
+<h1>cs2-coach-agent — live agent trace</h1>
+<p class="sub">POST a match state, watch the doer / budget gate / verifier run over Server-Sent Events.</p>
+
+<textarea id="input" spellcheck="false"></textarea>
+<div class="row">
+  <button id="run">Run ▶</button>
+  <label>config
+    <select id="config">
+      <option>full</option><option>no_verifier</option>
+      <option>no_hard_gate</option><option>doer_only</option>
+    </select>
+  </label>
+  <span id="status" style="opacity:.7"></span>
+</div>
+<div id="trace"></div>
+
+<script>
+// Vanilla SSE over fetch(): EventSource is GET-only and cannot carry a POST body,
+// so the standard approach for a POST event-stream is fetch() + a ReadableStream
+// reader with a tiny SSE frame parser. No framework, no build step.
+const $ = s => document.querySelector(s);
+const trace = $("#trace"), statusEl = $("#status");
+
+const sample = {
+  map: "Mirage", side: "T", score: { us: 3, them: 7 },
+  economy: { us_avg: 2400, them_avg: 5200 },
+  recent_rounds: [
+    { round: 8, result: "loss", detail: "A执行被守枪+连狙拒之门外, 白给4人" },
+    { round: 9, result: "loss", detail: "eco局rush B, 被双架点交叉火力清光" },
+    { round: 10, result: "loss", detail: "半起局中路慢摸, 被CT前顶打乱, 残局1v3失败" }
+  ]
+};
+$("#input").value = JSON.stringify(sample, null, 2);
+
+function line(event, data) {
+  const el = document.createElement("div");
+  el.className = "ev " + event;
+  let text;
+  switch (event) {
+    case "run_started": text = `${data.match_summary.map} ${data.match_summary.side} · config=${data.config}`; break;
+    case "attempt_started": text = `attempt ${data.attempt}`; break;
+    case "tool_call": text = `${data.tool}  ${data.input_summary} → ${data.result_summary}`; break;
+    case "doer_cap": text = `iteration cap ${data.cap} reached`; break;
+    case "doer_plan": text = `${data.plan.buy_type}: ${data.plan.buy.join(", ")} — ${data.plan.loss_reason}`; break;
+    case "budget_check": text = data.feasible ? `$${data.cost}/player · ok` : `$${data.cost}/player · VIOLATION: ${data.problems.join("; ")}`; break;
+    case "verifier_verdict": text = data.approved ? "APPROVED" : "REJECTED: " + (data.issues || []).join("; "); break;
+    case "attempt_rejected": text = "retry — " + data.issues.join("; "); break;
+    case "final": text = data.approved
+        ? `✓ ${data.plan.buy_type.toUpperCase()}: ${data.plan.buy.join(", ")}  ($${data.usage.cost_usd}, ${data.attempts} attempt(s))\n  ${data.plan.instruction}`
+        : `✗ no plan approved after ${data.attempts}: ${data.issues.join("; ")}`; break;
+    case "error": text = `error (${data.phase}): ${data.error}`; break;
+    default: text = JSON.stringify(data);
+  }
+  el.innerHTML = `<b>${event}</b>${text}`;
+  trace.appendChild(el);
+}
+
+async function run() {
+  trace.textContent = "";
+  let match;
+  try { match = JSON.parse($("#input").value); }
+  catch (e) { statusEl.textContent = "invalid JSON: " + e.message; return; }
+  statusEl.textContent = "running…";
+  $("#run").disabled = true;
+  try {
+    const res = await fetch(`/v1/coach/stream?config=${$("#config").value}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(match)
+    });
+    if (!res.ok) { statusEl.textContent = `HTTP ${res.status}` + (res.status === 429 ? " (at capacity, retry later)" : ""); return; }
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const frames = buf.split("\n\n"); buf = frames.pop();  // keep incomplete frame
+      for (const f of frames) {
+        if (f.startsWith(":")) continue;  // keepalive comment
+        const ev = (f.match(/^event: (.*)$/m) || [])[1];
+        const dl = (f.match(/^data: (.*)$/m) || [])[1];
+        if (ev && dl) line(ev, JSON.parse(dl));
+      }
+    }
+    statusEl.textContent = "done";
+  } catch (e) {
+    statusEl.textContent = "stream failed: " + e.message;
+  } finally {
+    $("#run").disabled = false;
+  }
+}
+$("#run").addEventListener("click", run);
+</script>
+</body>
+</html>

@@ -52,6 +52,96 @@ CS2 经济改动后需要重新核对并更新 `as_of`。默认手枪（glock/us
 重跑，会原样返回旧价格下算出的旧方案，delta 显示为 0 而看不出任何问题。现在 doer 的 cache key
 里显式包含了 `PRICES` 和 `doer_model`。凡是通过工具结果影响模型的输入，都得进 key。
 
+## Run as a service
+
+v0.3 wraps the agent in a FastAPI service. The agent core is untouched; `runner.py`
+is the single async trace source that both the CLI and the HTTP layer consume.
+
+```sh
+pip install -r requirements.txt
+uvicorn service:app --port 8099        # ANTHROPIC_API_KEY must be in the environment
+```
+
+**Why the trace is an event stream.** The agent's value is in *how* it arrives at a call
+— which rounds it read, which buys it priced, what the gate and verifier said. Collapsing
+that to a final JSON blob throws the observability away. `/v1/coach/stream` makes the
+run's internals a first-class product surface: one SSE event per tool call, per verdict,
+per retry.
+
+### Endpoints
+
+| method | path | purpose |
+|---|---|---|
+| `POST` | `/v1/coach?config=full` | run the agent, return the final plan + token usage as JSON |
+| `POST` | `/v1/coach/stream?config=full` | same input, stream the run as Server-Sent Events |
+| `GET` | `/healthz` | liveness + readiness (key present, prices load, gate agrees with one scenario) |
+| `GET` | `/` | minimal demo page: paste match JSON, switch config, watch the trace live |
+
+`config` is optional (default `full`) and accepts the four ablation names — the demo
+page's dropdown turns the ablation findings below into live interactive evidence.
+
+```sh
+# blocking JSON
+curl -sX POST 'localhost:8099/v1/coach?config=full' \
+  -H 'content-type: application/json' -d @sample_match.json
+
+# streaming trace
+curl -NX POST 'localhost:8099/v1/coach/stream' \
+  -H 'content-type: application/json' -d @sample_match.json
+```
+
+Sample SSE frames (abridged from a real run, ~74s, $0.15):
+
+```
+event: run_started
+data: {"request_id":"aa98281d-…","config":"full","match_summary":{"map":"Mirage",…}}
+
+event: tool_call
+data: {"attempt":1,"tool":"check_budget","input_summary":"{\"items\":[\"mac10\",…]}","result_summary":"{\"cost\":2200,\"feasible\":true,…}"}
+
+event: budget_check
+data: {"attempt":1,"cost":500,"feasible":true,"problems":[]}
+
+event: verifier_verdict
+data: {"attempt":1,"approved":true,"issues":[]}
+
+event: final
+data: {"approved":true,"plan":{…},"attempts":1,"usage":{"input_tokens":14191,"output_tokens":3332,"cost_usd":0.1491}}
+```
+
+The demo page uses `fetch()` + a `ReadableStream` reader, **not** `EventSource`:
+`EventSource` is GET-only and cannot send a POST body, so a POST event-stream needs the
+fetch-streaming approach (still vanilla JS, no framework, no build step).
+
+### Configuration (environment variables)
+
+| var | default | meaning |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | — | required for real runs; absent → `/healthz` reports not-ready |
+| `COACH_MAX_CONCURRENT_RUNS` | 2 | global cap on concurrent agent runs; over-cap → `429` + `Retry-After` |
+| `COACH_RUN_TIMEOUT_SECONDS` | 120 | hard wall-clock cap per run; over → `504` (JSON) / `error` event (stream) |
+| `COACH_MODEL` | `claude-opus-4-8` | doer + verifier model |
+| `COACH_MAX_ATTEMPTS` | 3 | outer retry cap |
+| `COACH_RETRY_AFTER` | 10 | `Retry-After` seconds returned on `429` |
+| `COACH_LOG_LEVEL` | INFO | |
+
+Cross-cutting: every request gets a UUID (in `X-Request-ID` and every JSON log line);
+per-request token/cost accounting is summed across all model calls and returned in the
+body; the concurrency cap is a lock-guarded counter (atomic check-and-take, so the stream
+endpoint decides 429-vs-run before opening a 200). Logs are JSON lines to stderr and
+`results/service.log`.
+
+### Tests (zero API cost)
+
+```sh
+pytest tests/ -v
+```
+
+`make_client` is monkeypatched to a fake that scripts the tool→plan→verdict sequence, so
+the suite makes no network calls. It covers request validation (422), the SSE event
+ordering, semaphore saturation (429, both endpoints), the timeout path (504 + partial
+trace / `error` event), and `/healthz` ready-vs-unready.
+
 ## Does the Verifier actually help?
 
 24 场景 × 4 配置 = 96 次运行，Doer = Opus 4.8，价格来自 `prices.json` (op.gg, 2026-07-17)。
