@@ -18,6 +18,8 @@ import service
 from conftest import SAMPLE_MATCH, FakeClient
 from sessions import Call, RoundOutcome, SessionStore, build_grounding
 from replay import run_replay
+from runner import run_agent
+from conftest import FakeMessages
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mini_rounds.jsonl"
 
@@ -190,6 +192,35 @@ def test_session_404_on_unknown_id(monkeypatch):
                                  json={"round": 1, "our_side": "T",
                                        "economy": {"us_avg": 800, "them_avg": 800}})).status_code == 404
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------- model routing
+
+def test_verifier_pinned_to_strong_model_when_doer_is_weak():
+    """A weak doer must not drag the verifier down to its model -- the auditor's
+    independence is the point. Regression for the Haiku-doer 400-on-effort bug."""
+    seen = []
+
+    class RecMessages(FakeMessages):
+        async def create(self, **kw):
+            seen.append(kw.get("model"))
+            return await super().create(**kw)
+
+    class RecClient:
+        def __init__(self):
+            self.messages = RecMessages()
+
+        async def close(self):
+            pass
+
+    async def body():
+        async for _ in run_agent(SAMPLE_MATCH, config="full", client=RecClient(),
+                                 model="claude-haiku-4-5-20251001"):
+            pass
+
+    asyncio.run(body())
+    assert any(m and m.startswith("claude-haiku-4-5") for m in seen), "doer should run on haiku"
+    assert agent.MODEL in seen, "verifier should stay pinned to the strong MODEL (opus)"
 
 
 # --------------------------------------------------------------------------- replay

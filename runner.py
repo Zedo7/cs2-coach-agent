@@ -93,13 +93,20 @@ async def run_agent(
     model: str = MODEL,
     max_attempts: int = 3,
     extra_context: Optional[str] = None,
+    verifier_model: Optional[str] = None,
 ) -> AsyncIterator[TraceEvent]:
     """Drive one full coaching run, yielding trace events. Terminal event is `final`.
 
     extra_context (session layer only) is appended to the doer prompt every attempt --
     compaction synopsis + adaptation pressure. None by default, so standalone runs are
-    unchanged. The agent's own system prompts are never modified."""
+    unchanged. The agent's own system prompts are never modified.
+
+    verifier_model defaults to MODEL (Opus), NOT to `model`: the verifier is the
+    independent auditor, so it stays a strong model even when the doer is weak -- pinning
+    it is the whole point of the decoupling (mirrors eval.py). A weak doer + weak verifier
+    would just rubber-stamp."""
     cfg = CONFIGS[config]
+    verifier_model = verifier_model or MODEL
     own_client = client is None
     client = client or anthropic.AsyncAnthropic()
     usage = {"input_tokens": 0, "output_tokens": 0,
@@ -176,15 +183,16 @@ async def run_agent(
                 "feasible": not hard_problems, "problems": hard_problems})
             issues = list(hard_problems) if cfg["hard_gate"] else []
 
-            # --- verifier -------------------------------------------------------
+            # --- verifier (pinned to verifier_model, effort dropped if unsupported) -----
             if cfg["verifier"]:
+                v_oc = {"format": {"type": "json_schema", "schema": VERIFIER_SCHEMA}}
+                if not verifier_model.startswith("claude-haiku-4-5"):
+                    v_oc["effort"] = "low"   # Haiku 4.5 rejects the effort parameter (400)
                 vr = await client.messages.create(
-                    model=model, max_tokens=2000, system=VERIFIER_SYSTEM,
-                    thinking={"type": "disabled"},
-                    output_config={"effort": "low",
-                                   "format": {"type": "json_schema", "schema": VERIFIER_SCHEMA}},
+                    model=verifier_model, max_tokens=2000, system=VERIFIER_SYSTEM,
+                    thinking={"type": "disabled"}, output_config=v_oc,
                     messages=[{"role": "user", "content": build_verifier_prompt(match, plan, cost)}])
-                _add_usage(usage, model, vr)
+                _add_usage(usage, verifier_model, vr)
                 verdict = _parse_plan(vr)
                 yield TraceEvent("verifier_verdict", {"attempt": attempt, **verdict})
                 if not verdict["approved"]:
