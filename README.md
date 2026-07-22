@@ -120,6 +120,130 @@ Team identity is anchored to the clan name (`team_clan_name`), not the side, so 
 survives the halftime swap; side is read at the freeze-end tick because the swap has not
 yet registered at the round-start tick of the first round after the half.
 
+## Session persistence and concurrency
+
+Sessions were an in-memory dict with lazy TTL. That works for one process and answers no
+production question, so v0.5 puts storage behind an interface with two backends.
+
+### Storage abstraction
+
+`SessionStore` (ABC, all-async) with `create` / `get` / `append_outcome` / `record_call` /
+`delete` / `touch`, plus three concurrency primitives (`claim_run`, `release_run`,
+`claim_compaction`). Two implementations, chosen by `COACH_SESSION_BACKEND=memory|redis`:
+
+| | `InMemoryStore` | `RedisStore` |
+|---|---|---|
+| deps | none (default) | `redis>=5` (`redis.asyncio`) |
+| survives restart | no | yes |
+| shared across workers | no | yes |
+| used by | tests, CLI, replay | the service in production |
+
+Everything above the store is backend-agnostic. **`get()` returns a snapshot in both
+backends** — the in-memory one deep-copies. That is deliberate: previously it handed back
+a live reference and `build_grounding` mutated it, which works in memory and *silently
+vanishes* against Redis. A mutation that succeeds under one backend and disappears under
+the other, while tests pass, is exactly the bug this refactor exists to prevent, so
+`build_grounding` is now pure and the store owns all state changes.
+
+**JSON, not pickle.** Pickle executes arbitrary code on load (a compromised store becomes
+RCE), couples the payload to exact class definitions (renaming a dataclass field breaks
+every live session on deploy), and is unreadable from `redis-cli` or any non-Python
+consumer. Our records are plain scalars/lists/dicts; the only thing JSON costs is native
+datetimes, and we already use float epochs.
+
+### Expiry: 30-minute sliding TTL
+
+`COACH_SESSION_TTL` (default `1800`), refreshed on every access.
+
+The key insight for picking the number: **TTL only has to cover the longest gap *between*
+rounds, not the length of a match.** Because refresh slides the deadline, a live match
+never expires no matter how long it runs. Normal inter-round gaps are ~2 minutes; the long
+tail is halftime plus tactical/technical pauses, realistically 10–15 minutes. 30 minutes
+clears that with margin.
+
+The tradeoff in both directions: too short and a user loses an in-progress match during a
+technical pause — the worst failure this system has, because the ledger *is* the product.
+Too long and you rent memory for abandoned sessions indefinitely. At 30 minutes a dead
+session costs half an hour of a few KB. Sites expecting long technical pauses should raise
+it to 2h and accept the storage.
+
+**The multi-key partial-expiry hazard.** A Redis session is several keys (a `meta` hash and
+two ledger lists). Per-key TTL means the metadata can expire while a ledger list survives,
+leaving a corrupt half-session. So every access refreshes **all** keys in a single
+pipeline, and a missing `meta` hash is the authoritative "session is gone" signal —
+orphaned ledgers self-clean via their own TTL.
+
+### Concurrency
+
+Two different problems that are usually conflated:
+
+**1. Lost updates on the ledger → append-only Redis lists.** The failure mode: two devices
+on the same session both read the ledger, both append, and the second write overwrites the
+first — one round silently disappears. We avoid it structurally. `RPUSH` is atomic, and
+ledger appends are **commutative**, so concurrent writers cannot lose each other's entry.
+
+Why not optimistic concurrency (CAS/version check)? CAS is right when a write *depends on
+the value you read* (`set score = f(ledger)`). Appending an outcome doesn't. CAS would
+manufacture a conflict between two writes that were always compatible, then force the
+caller into retry-or-409. Worse, the conflict window here spans the agent run — seconds to
+minutes — so nearly every genuinely concurrent pair would fail and retry.
+
+Why not a distributed lock? It serializes a read-modify-write we don't need to perform.
+Either the critical section excludes the agent run, in which case the append still needs to
+be safe and you've added a lock *and* kept the problem; or it includes the run, and you're
+holding a lock for minutes, tuning expiry against a crashed holder, and risking two holders
+when the TTL fires early. More machinery, more liveness risk, for commutative operations.
+
+Reads are consistent too: `get()` issues its `HGETALL` + two `LRANGE`s inside `MULTI/EXEC`,
+so the snapshot is one atomic point in time rather than three stitched together — you
+cannot observe a concurrent append half-applied (metadata from before, ledger from after).
+
+**2. A second `/coach` while one is running → `409`.** A coaching call answers "what do we
+buy *this* round." A second concurrent call is almost always a double-submit, a client
+retry, or a second device — not a real second question. Queueing would burn another full
+agent run (real money, tens of seconds) to answer a question already in flight, append a
+duplicate call for the same round, and leave the caller blocked past their own timeout.
+`409` + `Retry-After` is immediate and actionable. The guard is `SET …:run <token> NX PX`,
+released with a **token check** so a run whose guard already expired cannot release the
+next holder's; its TTL is bounded by the run timeout, so a crashed worker can never wedge a
+session for longer than one run.
+
+**Note the deliberate contrast:** problem 1 *rejects* locks, problem 2 *uses* a
+lock-shaped guard. They are different jobs. Problem 1 is data consistency, where a lock is
+the wrong tool for commutative writes. Problem 2 is **admission control for an expensive
+external side effect** — the right tool, and it guards no data at all. (This is orthogonal
+to `RunSlots`, which caps *total* concurrent runs across all sessions; both apply.)
+
+Compaction emission uses the same idea: the batch number is derived purely from ledger
+length, and `SET …:cmpct:{n} NX` decides who announces it, so N workers emit exactly one
+event instead of duplicating.
+
+### Message window vs token window
+
+We window by **rounds (messages)**, not tokens. A round record is bounded and uniform (a
+line of detail plus fixed numeric fields), so N rounds gives predictable context size and
+predictable cost. Token windows earn their complexity when message sizes vary unboundedly —
+user-pasted documents, large tool outputs — which ours don't.
+
+The honest gap: nothing currently *enforces* a token ceiling, so a pathological `detail`
+string could blow past the context budget the round window is supposed to imply. **Roadmap
+(not built):** a token guard as a safety net on top of the round window — count tokens on
+the assembled prompt and trim or force compaction if it exceeds a cap.
+
+### Config and tests
+
+| var | default | meaning |
+|---|---|---|
+| `COACH_SESSION_BACKEND` | `memory` | `memory` or `redis` |
+| `COACH_REDIS_URL` | `redis://localhost:6379/0` | connection URL |
+| `COACH_SESSION_TTL` | `1800` | sliding expiry seconds |
+| `COACH_SESSION_WINDOW` | `5` | K rounds of detail |
+| `COACH_COMPACT_BATCH` | `5` | rounds folded per compaction event |
+
+Every store test is **parametrized over both backends**, so parity is the same assertions
+rather than a second suite that can drift. `fakeredis` provides an in-process Redis, so the
+default suite needs no server and costs nothing: `pytest tests/ -v`.
+
 ### Session endpoints
 
 | method | path | purpose |

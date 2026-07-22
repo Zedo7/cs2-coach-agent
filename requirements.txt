@@ -4,6 +4,9 @@ fastapi>=0.110
 uvicorn>=0.29
 # demo ingestion (v0.4)
 demoparser2>=0.41
-# tests (no real API calls)
+# session persistence (v0.5) -- only needed for COACH_SESSION_BACKEND=redis
+redis>=5
+# tests (no real API calls, no live Redis)
 pytest>=8.0
 httpx>=0.27
+fakeredis>=2.21

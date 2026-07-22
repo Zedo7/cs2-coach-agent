@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from enum import Enum
@@ -31,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 import agent
 from runner import CONFIGS, TraceEvent, run_agent
-from sessions import Call, RoundOutcome, SessionStore, build_grounding
+from sessions import Call, RoundOutcome, SessionNotFound, build_grounding, make_store
 
 ROOT = Path(__file__).parent
 
@@ -113,7 +114,8 @@ class RunSlots:
 
 
 slots = RunSlots(MAX_CONCURRENT)
-store = SessionStore(ttl_seconds=SESSION_TTL, window=SESSION_WINDOW, compact_batch=COMPACT_BATCH)
+SESSION_BACKEND = os.getenv("COACH_SESSION_BACKEND", "memory")
+store = make_store(ttl_seconds=SESSION_TTL, window=SESSION_WINDOW, compact_batch=COMPACT_BATCH)
 
 
 def make_client() -> anthropic.AsyncAnthropic:
@@ -187,7 +189,15 @@ class CoachIn(BaseModel):
 
 # --- app ---------------------------------------------------------------------
 _setup_logging()
-app = FastAPI(title="cs2-coach-agent", version="0.3.0")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await store.close()          # release the Redis connection pool on shutdown
+
+
+app = FastAPI(title="cs2-coach-agent", version="0.5.0", lifespan=lifespan)
 
 
 @app.middleware("http")
@@ -334,13 +344,13 @@ async def coach_stream(body: MatchState, config: ConfigName = Query(ConfigName.f
 def _session_state(s) -> dict:
     return {"session_id": s.id, "map": s.map, "us_team": s.us_team, "window": s.window,
             "rounds_submitted": len(s.outcomes), "calls_made": len(s.calls),
-            "compacted_batches": s.compacted_batches,
+            "compacted_rounds": max(0, len(s.outcomes) - s.window),
             "score": s.outcomes[-1].score_after if s.outcomes else {"us": 0, "them": 0}}
 
 
 @app.post("/v1/sessions")
 async def create_session(body: CreateSession):
-    s = store.create(map=body.map, us_team=body.us_team, window=body.window)
+    s = await store.create(map=body.map, us_team=body.us_team, window=body.window)
     _log(logging.INFO, "session_created", session_id=s.id, map=s.map)
     return JSONResponse(_session_state(s), status_code=201)
 
@@ -348,22 +358,23 @@ async def create_session(body: CreateSession):
 @app.get("/v1/sessions/{sid}")
 async def get_session(sid: str):
     try:
-        return _session_state(store.get(sid))
-    except KeyError:
+        return _session_state(await store.get(sid))
+    except SessionNotFound:
         raise HTTPException(status_code=404, detail="session not found or expired")
 
 
 @app.delete("/v1/sessions/{sid}")
 async def delete_session(sid: str):
-    store.delete(sid)
+    await store.delete(sid)
     return JSONResponse({"deleted": sid}, status_code=200)
 
 
 @app.post("/v1/sessions/{sid}/round")
 async def submit_round(sid: str, body: RoundIn):
     try:
-        s = store.submit_round(sid, RoundOutcome(**body.model_dump()))
-    except KeyError:
+        await store.append_outcome(sid, RoundOutcome(**body.model_dump()))
+        s = await store.get(sid)
+    except SessionNotFound:
         raise HTTPException(status_code=404, detail="session not found or expired")
     _log(logging.INFO, "round_submitted", session_id=sid, round=body.round, result=body.result)
     return _session_state(s)
@@ -376,15 +387,29 @@ async def coach_session(sid: str, body: CoachIn, config: ConfigName = Query(Conf
     detail window, then the normal run trace. Records the call back into the ledger."""
     rid = request_id_var.get()
     try:
-        session = store.get(sid)
-    except KeyError:
+        session = await store.get(sid)
+    except SessionNotFound:
         raise HTTPException(status_code=404, detail="session not found or expired")
+
+    # Per-session admission control BEFORE the global slot, so a duplicate request 409s
+    # without consuming capacity another session could have used. Guard TTL is bounded by
+    # the run timeout, so a crashed worker can never wedge a session for longer than one run.
+    run_token = await store.claim_run(sid, RUN_TIMEOUT + 10)
+    if run_token is None:
+        _log(logging.WARNING, "run_already_in_progress", session_id=sid)
+        raise HTTPException(status_code=409,
+                            detail="a coaching run is already in progress for this session",
+                            headers={"Retry-After": str(RETRY_AFTER)})
     if not await slots.try_acquire():
+        await store.release_run(sid, run_token)
         _log(logging.WARNING, "rejected_at_capacity", session_id=sid)
         raise HTTPException(status_code=429, detail="server at capacity",
                             headers={"Retry-After": str(RETRY_AFTER)})
 
-    recent_rounds, extra_context, compaction_event = build_grounding(session, COMPACT_BATCH)
+    recent_rounds, extra_context, compaction = build_grounding(session, COMPACT_BATCH)
+    # Ask the store, not the snapshot: exactly one worker emits a given batch's event.
+    compaction_event = compaction if (
+        compaction and await store.claim_compaction(sid, compaction["batch"])) else None
     score = session.outcomes[-1].score_after if session.outcomes else {"us": 0, "them": 0}
     match = {"map": session.map, "side": body.our_side, "score": score,
              "economy": body.economy.model_dump(), "recent_rounds": recent_rounds}
@@ -404,10 +429,10 @@ async def coach_session(sid: str, body: CoachIn, config: ConfigName = Query(Conf
                     continue
                 if ev.event == "final":
                     p = ev.data["plan"]
-                    store.record_call(sid, Call(round=body.round, buy_type=p["buy_type"],
-                                                buy=p["buy"], cost=ev.data["cost"],
-                                                approved=ev.data["approved"],
-                                                attempts=ev.data["attempts"]))
+                    await store.record_call(sid, Call(
+                        round=body.round, buy_type=p["buy_type"], buy=p["buy"],
+                        cost=ev.data["cost"], approved=ev.data["approved"],
+                        attempts=ev.data["attempts"]))
                     _log(logging.INFO, "run_done", session_id=sid, round=body.round,
                          approved=ev.data["approved"], cost_usd=ev.data["usage"]["cost_usd"])
                 yield ev.sse()
@@ -422,6 +447,7 @@ async def coach_session(sid: str, body: CoachIn, config: ConfigName = Query(Conf
         finally:
             await client.close()
             await slots.release()
+            await store.release_run(sid, run_token)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers={
         "X-Request-ID": rid, "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -449,7 +475,9 @@ async def healthz():
     return JSONResponse(status_code=200 if ready else 503,
                         content={"live": True, "ready": ready, "checks": checks,
                                  "config": {"model": MODEL, "max_concurrent": MAX_CONCURRENT,
-                                            "run_timeout_s": RUN_TIMEOUT, "max_attempts": MAX_ATTEMPTS}})
+                                            "run_timeout_s": RUN_TIMEOUT, "max_attempts": MAX_ATTEMPTS,
+                                            "session_backend": SESSION_BACKEND,
+                                            "session_ttl_s": SESSION_TTL}})
 
 
 @app.get("/", response_class=HTMLResponse)

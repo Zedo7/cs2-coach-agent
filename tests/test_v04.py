@@ -16,7 +16,9 @@ import agent
 import ingest
 import service
 from conftest import SAMPLE_MATCH, FakeClient
-from sessions import Call, RoundOutcome, SessionStore, build_grounding
+from sessions import (
+    Call, InMemoryStore, RoundOutcome, Session, SessionNotFound, build_grounding,
+)
 from replay import run_replay
 from runner import run_agent
 from conftest import FakeMessages
@@ -101,15 +103,17 @@ def test_detail_string_variants():
 # --------------------------------------------------------------------------- session store
 
 def test_session_store_ttl_expiry():
-    store = SessionStore(ttl_seconds=0.05)
-    s = store.create(map="Inferno", us_team="FURIA")
-    assert store.get(s.id).id == s.id
-    time.sleep(0.1)
-    try:
-        store.get(s.id)
-        assert False, "expected expiry"
-    except KeyError:
-        pass
+    async def body():
+        store = InMemoryStore(ttl_seconds=0.05)
+        s = await store.create(map="Inferno", us_team="FURIA")
+        assert (await store.get(s.id)).id == s.id
+        time.sleep(0.1)
+        try:
+            await store.get(s.id)
+            assert False, "expected expiry"
+        except SessionNotFound:
+            pass
+    asyncio.run(body())
 
 
 def _outcomes_from_fixture():
@@ -119,22 +123,29 @@ def _outcomes_from_fixture():
 
 
 def test_build_grounding_window_and_compaction():
-    store = SessionStore(window=5, compact_batch=5)
-    s = store.create(map="Inferno", us_team="FURIA")
-    s.outcomes = _outcomes_from_fixture()          # 12 rounds
-    recent, extra, compaction = build_grounding(s, compact_batch=5)
-    assert len(recent) == 5                          # K-window
-    assert recent[0]["round"] == 8 and recent[-1]["round"] == 12
-    assert compaction is not None and compaction["type"] == "deterministic"
-    assert "EARLIER ROUNDS (deterministic compaction" in extra
-    # second call: same batch already emitted -> no new compaction event
-    _, _, again = build_grounding(s, compact_batch=5)
-    assert again is None
+    async def body():
+        store = InMemoryStore(window=5, compact_batch=5)
+        s = await store.create(map="Inferno", us_team="FURIA")
+        for o in _outcomes_from_fixture():          # 12 rounds
+            await store.append_outcome(s.id, o)
+        s = await store.get(s.id)
+        recent, extra, compaction = build_grounding(s, compact_batch=5)
+        assert len(recent) == 5                      # K-window
+        assert recent[0]["round"] == 8 and recent[-1]["round"] == 12
+        assert compaction is not None and compaction["type"] == "deterministic"
+        assert "EARLIER ROUNDS (deterministic compaction" in extra
+        # build_grounding is PURE: it reports the pending batch every time. The store
+        # decides emission, and only the first claim wins.
+        _, _, again = build_grounding(s, compact_batch=5)
+        assert again is not None and again["batch"] == compaction["batch"]
+        assert await store.claim_compaction(s.id, compaction["batch"]) is True
+        assert await store.claim_compaction(s.id, compaction["batch"]) is False
+    asyncio.run(body())
 
 
 def test_build_grounding_adaptation_pressure():
-    store = SessionStore(window=5, compact_batch=5)
-    s = store.create(map="Inferno", us_team="FURIA")
+    store = InMemoryStore(window=5, compact_batch=5)
+    s = Session(id="sesn_x", map="Inferno", us_team="FURIA", window=5, created_at=0.0)
     s.outcomes = _outcomes_from_fixture()          # ends on a long loss streak
     # simulate the agent having called the same buy through the streak
     s.calls = [Call(round=r, buy_type="full_buy", buy=["ak47"], cost=4200,

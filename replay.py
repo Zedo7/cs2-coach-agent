@@ -28,7 +28,7 @@ import anthropic
 import agent
 from ingest import load_rounds
 from runner import run_agent
-from sessions import Call, RoundOutcome, SessionStore, build_grounding
+from sessions import Call, InMemoryStore, RoundOutcome, build_grounding
 
 
 async def _run_one(client, match, config, model, extra_context):
@@ -46,24 +46,27 @@ async def run_replay(rounds: list, client, *, config="full", model=None,
                      max_rounds: Optional[int] = None, on_event=None):
     """Drive rounds through a session. Returns (report_rows, session)."""
     model = model or agent.MODEL
-    store = SessionStore(window=window, compact_batch=compact_batch)
-    s = store.create(map=map_name, us_team=us_team, window=window)
+    store = InMemoryStore(window=window, compact_batch=compact_batch)
+    s = await store.create(map=map_name, us_team=us_team, window=window)
+    sid = s.id
     rows = []
     todo = rounds if max_rounds is None else rounds[:max_rounds]
 
     for r in todo:
-        recent, extra_context, compaction_event = build_grounding(s, compact_batch)
-        if compaction_event and on_event:
-            on_event("compaction", {"round": r["round"], **compaction_event})
+        # get() returns a snapshot; re-read each round rather than holding a stale object
+        s = await store.get(sid)
+        recent, extra_context, compaction = build_grounding(s, compact_batch)
+        if compaction and await store.claim_compaction(sid, compaction["batch"]) and on_event:
+            on_event("compaction", {"round": r["round"], **compaction})
         score = s.outcomes[-1].score_after if s.outcomes else {"us": 0, "them": 0}
         match = {"map": map_name, "side": r["our_side"], "score": score,
                  "economy": r["economy"], "recent_rounds": recent}
 
         final = await _run_one(client, match, config, model, extra_context)
         plan = final["plan"]
-        store.record_call(s.id, Call(round=r["round"], buy_type=plan["buy_type"],
-                                     buy=plan["buy"], cost=final["cost"],
-                                     approved=final["approved"], attempts=final["attempts"]))
+        await store.record_call(sid, Call(round=r["round"], buy_type=plan["buy_type"],
+                                          buy=plan["buy"], cost=final["cost"],
+                                          approved=final["approved"], attempts=final["attempts"]))
 
         actual_buy = r["buy"].get("us")
         row = {
@@ -81,11 +84,11 @@ async def run_replay(rounds: list, client, *, config="full", model=None,
         if on_event:
             on_event("round", row)
         # reveal the real outcome to the ledger AFTER the agent has committed its call
-        store.submit_round(s.id, RoundOutcome(**{k: r[k] for k in (
+        await store.append_outcome(sid, RoundOutcome(**{k: r[k] for k in (
             "round", "our_side", "their_side", "result", "winner",
             "score_after", "economy", "buy", "detail")}))
 
-    return rows, s
+    return rows, await store.get(sid)
 
 
 def render_report(rows, meta) -> str:
